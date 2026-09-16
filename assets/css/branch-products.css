@@ -1,0 +1,120 @@
+/**
+ * Massar Branch Products Slider
+ */
+
+/* ================================
+   Slider
+================================ */
+
+.abm-branch-products {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+}
+
+.abm-branch-products .swiper {
+    width: 100%;
+    overflow: hidden;
+}
+
+.abm-branch-products .swiper-wrapper {
+    align-items: stretch;
+}
+
+.abm-branch-products .swiper-slide {
+    height: auto;
+    box-sizing: border-box;
+}
+
+/* ================================
+   WooCommerce Product
+================================ */
+
+.abm-branch-products .swiper-slide > .product {
+    width: 100% !important;
+    height: 100%;
+    margin: 0 !important;
+    float: none !important;
+}
+
+/*
+ * WooCommerce themes can apply grid widths
+ * directly to li.product.
+ */
+.abm-branch-products ul.products {
+    display: flex;
+    margin: 0;
+    padding: 0;
+}
+
+.abm-branch-products ul.products::before,
+.abm-branch-products ul.products::after {
+    display: none;
+}
+
+.abm-branch-products ul.products li.product {
+    width: 100% !important;
+    margin: 0 !important;
+    float: none !important;
+    clear: none !important;
+}
+
+/* ================================
+   Navigation
+================================ */
+
+.abm-branch-products .swiper-button-prev,
+.abm-branch-products .swiper-button-next {
+    width: 42px;
+    height: 42px;
+
+    border-radius: 50%;
+
+    background: #ffffff;
+
+    box-shadow:
+        0 2px 10px rgba(0, 0, 0, 0.12);
+
+    transition:
+        opacity 0.2s ease,
+        transform 0.2s ease;
+}
+
+.abm-branch-products .swiper-button-prev::after,
+.abm-branch-products .swiper-button-next::after {
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.abm-branch-products .swiper-button-prev:hover,
+.abm-branch-products .swiper-button-next:hover {
+    transform: scale(1.05);
+}
+
+/* ================================
+   Pagination
+================================ */
+
+.abm-branch-products .swiper-pagination {
+    position: relative;
+    margin-top: 24px;
+    bottom: auto;
+}
+
+/* ================================
+   Mobile
+================================ */
+
+@media (max-width: 767px) {
+
+    .abm-branch-products .swiper-button-prev,
+    .abm-branch-products .swiper-button-next {
+        width: 36px;
+        height: 36px;
+    }
+
+    .abm-branch-products .swiper-button-prev::after,
+    .abm-branch-products .swiper-button-next::after {
+        font-size: 14px;
+    }
+}

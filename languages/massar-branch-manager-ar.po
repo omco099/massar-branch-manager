@@ -1,0 +1,119 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Massar Branch Manager 0.1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"Last-Translator: Massar Branch Manager\n"
+"Language-Team: Arabic\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: ar\n"
+"Plural-Forms: nplurals=6; plural=n%100==0 ? 0 : n%100==1 ? 1 : n%100==2 ? 2 : n%100>=3 && n%100<=10 ? 3 : n%100>=11 && n%100<=99 ? 4 : 5;\n"
+"X-Domain: massar-branch-manager\n"
+
+
+#: src/Admin/Pages/BranchListPage.php
+msgid "Active"
+msgstr "نشط"
+
+#: src/Product/ProductFields.php
+msgid "Available In This Branch"
+msgstr "متاح في هذا الفرع"
+
+#: src/Checkout/OrderMetaManager.php
+#: src/Product/ProductBranchManager.php
+msgid "Branch"
+msgstr "الفرع"
+
+#: src/Product/ProductDataTab.php
+msgid "Branch Data"
+msgstr "بيانات الفرع"
+
+#: src/Product/ProductMetaBox.php
+msgid "Branch Pricing & Stock"
+msgstr "أسعار ومخزون الفرع"
+
+#: src/Admin/Menu.php
+#: src/Admin/Pages/BranchListPage.php
+msgid "Branches"
+msgstr "الفروع"
+
+#: src/Product/ProductBranchManager.php
+msgid "Choose Branch"
+msgstr "اختر الفرع"
+
+#: src/Product/ProductMetaBox.php
+msgid "Enable Branch"
+msgstr "تفعيل الفرع"
+
+#: src/Product/ProductMetaBox.php
+msgid "Enabled"
+msgstr "مفعّل"
+
+#: src/Admin/Pages/BranchListPage.php
+msgid "ID"
+msgstr "المعرّف"
+
+#: src/Admin/Pages/BranchListPage.php
+msgid "Inactive"
+msgstr "غير نشط"
+
+#: src/Admin/Pages/BranchListPage.php
+msgid "Name"
+msgstr "الاسم"
+
+#: src/Shortcodes/BranchProductsShortcode.php
+msgid "Next products"
+msgstr "المنتجات التالية"
+
+#: src/Admin/Pages/BranchListPage.php
+msgid "No branches found."
+msgstr "لم يتم العثور على فروع."
+
+#: src/Cart/CartValidator.php
+msgid "Please select a branch before adding this product to the cart."
+msgstr "يرجى اختيار فرع قبل إضافة هذا المنتج إلى السلة."
+
+#: src/Shortcodes/BranchProductsShortcode.php
+msgid "Previous products"
+msgstr "المنتجات السابقة"
+
+#: src/Product/ProductMetaBox.php
+msgid "Regular Price"
+msgstr "السعر العادي"
+
+#: src/Product/ProductMetaBox.php
+msgid "Sale Price"
+msgstr "سعر التخفيض"
+
+#: src/Branch/BranchSelectorRenderer.php
+msgid "Select Branch"
+msgstr "اختر الفرع"
+
+#: src/Product/ProductBranchManager.php
+msgid "Select a branch"
+msgstr "اختر فرعًا"
+
+#: src/Admin/Pages/BranchListPage.php
+msgid "Slug"
+msgstr "الرابط المختصر"
+
+#: src/Admin/Pages/BranchListPage.php
+msgid "Status"
+msgstr "الحالة"
+
+#: src/Product/ProductMetaBox.php
+msgid "Stock Quantity"
+msgstr "كمية المخزون"
+
+#: src/Admin/Pages/BranchListPage.php
+msgid "These are the branches currently available in the store."
+msgstr "الفروع المتاحة حاليًا في المتجر."
+
+#: src/Cart/CartValidator.php
+msgid "This product is not available in the selected branch."
+msgstr "هذا المنتج غير متاح في الفرع المحدد."
+
+#: src/Cart/CartValidator.php
+msgid "You cannot add products from different branches to the same cart."
+msgstr "لا يمكنك إضافة منتجات من فروع مختلفة إلى السلة نفسها."
