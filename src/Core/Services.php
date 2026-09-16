@@ -19,6 +19,7 @@ use Alnaseeg\BranchManager\Catalog\BranchCatalogService;
 use Alnaseeg\BranchManager\Checkout\OrderMetaManager;
 use Alnaseeg\BranchManager\Product\ProductBranchManager;
 use Alnaseeg\BranchManager\Product\ProductRepository;
+use Alnaseeg\BranchManager\Shipping\BranchPickupFilter;
 use Alnaseeg\BranchManager\Shortcodes\BranchProductsShortcode;
 
 /**
@@ -164,8 +165,8 @@ final class Services
     }
 
     /**
-    * Branch cart manager.
-    */
+     * Branch cart manager.
+     */
     public function branchCartManager(): BranchCartManager
     {
         return $this->services[__METHOD__]
@@ -202,6 +203,17 @@ final class Services
         return $this->services[__METHOD__]
             ??= new OrderMetaManager(
                 $this->branchRepository()
-        );
+            );
+    }
+
+    /**
+     * Branch pickup filter.
+     */
+    public function branchPickupFilter(): BranchPickupFilter
+    {
+        return $this->services[__METHOD__]
+            ??= new BranchPickupFilter(
+                $this->branchResolver()
+            );
     }
 }

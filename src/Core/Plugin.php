@@ -98,6 +98,12 @@ final class Plugin
         $services->branchCatalogFilter()->register();
 
         /*
+         * Filter WooCommerce Local Pickup
+         * according to the currently active branch.
+         */
+        $services->branchPickupFilter()->register();
+
+        /*
          * Save branch information into the order.
          */
         $services->orderMetaManager()->register();
