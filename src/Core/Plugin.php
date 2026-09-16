@@ -98,12 +98,6 @@ final class Plugin
         $services->branchCatalogFilter()->register();
 
         /*
-         * Filter WooCommerce Local Pickup rates
-         * according to the currently active Massar branch.
-         */
-        $services->branchPickupFilter()->register();
-
-        /*
          * Save branch information into the order.
          */
         $services->orderMetaManager()->register();
