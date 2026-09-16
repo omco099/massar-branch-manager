@@ -19,11 +19,13 @@ final class BranchPickupFilter
     private const PICKUP_METHOD_ID = 'pickup_location';
 
     /**
-     * Map Massar branch slugs to WooCommerce pickup location names.
+     * Map Massar branch slugs to the exact WooCommerce
+     * Local Pickup location names.
      *
-     * The WooCommerce pickup rate index is intentionally not used here.
+     * The WooCommerce pickup rate index is intentionally
+     * NOT used for branch matching.
      *
-     * @var array<string,string>
+     * @var array<string, string>
      */
     private const BRANCH_PICKUP_LOCATIONS = [
         'mall-of-oman' => 'مول عمان',
@@ -50,17 +52,24 @@ final class BranchPickupFilter
     }
 
     /**
-     * Filter Local Pickup rates according to the current branch.
+     * Filter WooCommerce shipping rates.
      *
      * Normal shipping methods are always preserved.
      *
-     * If the current branch cannot be resolved, or the matching
-     * pickup location cannot be found, the original rates are returned.
+     * For Local Pickup:
+     * - Keep only the pickup location belonging to the
+     *   currently active Massar branch.
+     * - Keep the original pickup rate cost/taxes.
      *
-     * @param array<string,WC_Shipping_Rate> $rates
-     * @param array<string,mixed>            $package
+     * Safety behavior:
+     * If the branch cannot be resolved, the branch is not mapped,
+     * no pickup rates exist, or the matching pickup rate cannot
+     * be identified, the original rates are returned unchanged.
      *
-     * @return array<string,WC_Shipping_Rate>
+     * @param array<string, WC_Shipping_Rate> $rates
+     * @param array<string, mixed>            $package
+     *
+     * @return array<string, WC_Shipping_Rate>
      */
     public function filterRates(
         array $rates,
@@ -69,10 +78,10 @@ final class BranchPickupFilter
         unset($package);
 
         /*
-         * Resolve the branch using the existing Massar
-         * BranchResolver.
+         * Resolve the current Massar branch through the existing
+         * branch system.
          *
-         * We do not create another branch/session mechanism.
+         * No new session, cookie, or branch selector is created.
          */
         $branch = $this->branchResolver->current();
 
@@ -83,8 +92,7 @@ final class BranchPickupFilter
         $branchSlug = $branch->slug();
 
         /*
-         * Only branches explicitly mapped to a Pickup location
-         * participate in this filter.
+         * Only explicitly mapped Massar branches are handled.
          */
         if (!isset(self::BRANCH_PICKUP_LOCATIONS[$branchSlug])) {
             return $rates;
@@ -92,28 +100,22 @@ final class BranchPickupFilter
 
         $expectedPickupLocation = self::BRANCH_PICKUP_LOCATIONS[$branchSlug];
 
-        /*
-         * First verify that WooCommerce actually has the expected
-         * Pickup Location configured and enabled.
-         *
-         * This gives us a safe failure mode:
-         * if matching fails, we leave all rates untouched.
-         */
-        if (!$this->hasConfiguredPickupLocation($expectedPickupLocation)) {
-            return $rates;
-        }
-
         $filteredRates = [];
+        $hasPickupRates = false;
         $matchingPickupFound = false;
 
         foreach ($rates as $rateKey => $rate) {
+            /*
+             * Keep unexpected/non-standard rate values untouched.
+             */
             if (!$rate instanceof WC_Shipping_Rate) {
                 $filteredRates[$rateKey] = $rate;
                 continue;
             }
 
             /*
-             * Keep every non-Pickup shipping method exactly as it is.
+             * Preserve every normal shipping method exactly as
+             * WooCommerce generated it.
              */
             if ($rate->get_method_id() !== self::PICKUP_METHOD_ID) {
                 $filteredRates[$rateKey] = $rate;
@@ -121,19 +123,26 @@ final class BranchPickupFilter
             }
 
             /*
-             * This is a Pickup rate.
-             *
-             * WooCommerce stores the actual Pickup Location name
-             * in the rate metadata.
+             * We found at least one Local Pickup rate.
              */
-            $pickupLocation = (string) $rate->get_meta(
+            $hasPickupRates = true;
+
+            /*
+             * WooCommerce Local Pickup stores the pickup location
+             * name in the shipping rate metadata.
+             */
+            $pickupLocation = $rate->get_meta(
                 'pickup_location',
                 true
             );
 
+            if (!is_string($pickupLocation)) {
+                continue;
+            }
+
             /*
-             * Keep only the Pickup Location belonging to
-             * the currently active Massar branch.
+             * Keep only the pickup location belonging to the
+             * current Massar branch.
              */
             if ($pickupLocation === $expectedPickupLocation) {
                 $filteredRates[$rateKey] = $rate;
@@ -142,57 +151,31 @@ final class BranchPickupFilter
         }
 
         /*
-         * Safety rule:
+         * No Local Pickup rates were generated by WooCommerce.
          *
-         * Never remove all Pickup rates if the expected matching
-         * Pickup rate could not be identified.
+         * Do not alter the original shipping result.
+         */
+        if (!$hasPickupRates) {
+            return $rates;
+        }
+
+        /*
+         * We could not safely identify the pickup location for
+         * the current branch.
          *
-         * In that case WooCommerce receives the original rates.
+         * Do not risk hiding all pickup options.
          */
         if (!$matchingPickupFound) {
             return $rates;
         }
 
+        /*
+         * Normal shipping methods + the single matching
+         * Local Pickup rate are returned.
+         *
+         * The pickup rate itself is not modified, so its
+         * WooCommerce cost/tax configuration remains intact.
+         */
         return $filteredRates;
-    }
-
-    /**
-     * Check whether the expected WooCommerce Pickup Location
-     * exists and is enabled.
-     */
-    private function hasConfiguredPickupLocation(
-        string $expectedLocation
-    ): bool {
-        $locations = get_option(
-            'pickup_location_pickup_locations',
-            []
-        );
-
-        if (!is_array($locations)) {
-            return false;
-        }
-
-        foreach ($locations as $location) {
-            if (!is_array($location)) {
-                continue;
-            }
-
-            $name = isset($location['name'])
-                ? (string) $location['name']
-                : '';
-
-            if ($name !== $expectedLocation) {
-                continue;
-            }
-
-            /*
-             * WooCommerce stores enabled as a boolean in the
-             * current Local Pickup configuration.
-             */
-            return !isset($location['enabled'])
-                || wc_string_to_bool($location['enabled']);
-        }
-
-        return false;
     }
 }
