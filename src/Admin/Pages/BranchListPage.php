@@ -29,7 +29,7 @@ final class BranchListPage
 
             <div style="margin: 20px 0 16px;">
                 <img
-                    src="<?php echo esc_url(MASSAR_BRANCH_MANAGER_PLUGIN_URL . 'assets/images/massar-logo.png'); ?>"
+                    src="<?php echo esc_url(MASSAR_BRANCH_MANAGER_PLUGIN_URL . 'assets/images/massar-logo.jepg'); ?>"
                     alt="Massar Branch Manager"
                     style="display:block;max-width:220px;height:auto;"
                 >
