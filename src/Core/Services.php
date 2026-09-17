@@ -213,7 +213,7 @@ final class Services
     {
         return $this->services[__METHOD__]
             ??= new BranchPickupFilter(
-                $this->branchResolver()
+                $this->branchRepository()
             );
     }
 }
