@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace Alnaseeg\BranchManager\Shipping;
 
-use Alnaseeg\BranchManager\Branch\Branch;
 use Alnaseeg\BranchManager\Branch\BranchRepository;
-use WC_Shipping_Rate;
 
 /**
- * Filters WooCommerce Local Pickup rates according to
- * the Massar branch stored on the current cart/package.
+ * Controls WooCommerce Local Pickup rates according to
+ * the current Massar branch.
+ *
+ * WooCommerce 11.x creates Local Pickup rates through
+ * WC_Shipping_Method::add_rate().
+ *
+ * This class filters the rate arguments before WooCommerce
+ * creates the WC_Shipping_Rate object.
  */
 final class BranchPickupFilter
 {
@@ -23,8 +27,8 @@ final class BranchPickupFilter
      * Map Massar branch slugs to the exact WooCommerce
      * Local Pickup location names.
      *
-     * The WooCommerce pickup rate index is intentionally
-     * NOT used for branch matching.
+     * The numeric pickup location index is intentionally
+     * NOT used as branch logic.
      *
      * @var array<string, string>
      */
@@ -34,6 +38,31 @@ final class BranchPickupFilter
         'al-arimi'    => 'العريمي',
     ];
 
+    /**
+     * Cached current branch ID for this request.
+     */
+    private ?int $branchId = null;
+
+    /**
+     * Whether the branch ID has already been resolved.
+     */
+    private bool $branchResolved = false;
+
+    /**
+     * Cached expected WooCommerce Pickup Location.
+     */
+    private ?string $expectedPickupLocation = null;
+
+    /**
+     * Whether the expected Pickup Location was verified.
+     */
+    private bool $pickupLocationVerified = false;
+
+    /**
+     * Whether the expected Pickup Location exists and is enabled.
+     */
+    private bool $pickupLocationAvailable = false;
+
     public function __construct(
         private readonly BranchRepository $branchRepository
     ) {
@@ -41,220 +70,304 @@ final class BranchPickupFilter
 
     /**
      * Register WooCommerce hooks.
+     *
+     * The filter is intentionally registered on
+     * woocommerce_shipping_method_add_rate_args.
+     *
+     * This runs before WooCommerce creates the shipping rate.
      */
     public function register(): void
     {
         add_filter(
-            'woocommerce_package_rates',
-            [$this, 'filterRates'],
+            'woocommerce_shipping_method_add_rate_args',
+            [$this, 'filterRateArguments'],
             20,
             2
         );
     }
 
     /**
-     * Filter WooCommerce Local Pickup rates.
+     * Filter shipping rate arguments before WooCommerce
+     * creates the WC_Shipping_Rate object.
      *
-     * Normal shipping methods are always preserved.
+     * Normal shipping methods are returned untouched.
      *
-     * The current Massar branch is read from the package
-     * cart items using the existing wcbm_branch_id value.
+     * For WooCommerce Local Pickup:
      *
-     * @param array<string, WC_Shipping_Rate> $rates
-     * @param array<string, mixed>            $package
+     * - Keep the Pickup Location belonging to the
+     *   current Massar branch.
+     * - Prevent other Pickup Locations from being created.
      *
-     * @return array<string, WC_Shipping_Rate>
+     * If the current branch cannot be resolved, or the expected
+     * Pickup Location is not configured/enabled, all rate arguments
+     * are returned unchanged as a safety measure.
+     *
+     * @param array<string,mixed> $args
+     * @param mixed                $shippingMethod
+     *
+     * @return array<string,mixed>
      */
-    public function filterRates(
-        array $rates,
-        array $package
+    public function filterRateArguments(
+        array $args,
+        mixed $shippingMethod
     ): array {
-        /*
-         * Resolve the branch directly from the current
-         * WooCommerce package/cart contents.
-         *
-         * This avoids calling BranchResolver during
-         * WooCommerce shipping-rate calculation.
-         */
-        $branch = $this->resolveBranchFromPackage($package);
+        unset($shippingMethod);
 
         /*
-         * If no branch can be safely identified,
-         * do not modify WooCommerce's shipping rates.
+         * Only inspect WooCommerce's new Local Pickup rates.
+         *
+         * Example:
+         * pickup_location:0
+         * pickup_location:1
+         * pickup_location:2
          */
-        if ($branch === null) {
-            return $rates;
+        $rateId = isset($args['id'])
+            ? (string) $args['id']
+            : '';
+
+        if (!$this->isPickupRate($rateId)) {
+            return $args;
+        }
+
+        /*
+         * The Local Pickup implementation supplies the actual
+         * location name in the rate metadata.
+         */
+        $pickupLocation = '';
+
+        if (
+            isset($args['meta_data'])
+            && is_array($args['meta_data'])
+            && isset($args['meta_data']['pickup_location'])
+        ) {
+            $pickupLocation = (string) $args['meta_data']['pickup_location'];
+        }
+
+        /*
+         * If WooCommerce did not provide the expected Pickup
+         * Location metadata, do not interfere with the rate.
+         */
+        if ($pickupLocation === '') {
+            return $args;
+        }
+
+        /*
+         * Resolve the Massar branch from the actual shipping
+         * package/cart contents.
+         *
+         * We intentionally do NOT call BranchResolver here.
+         *
+         * Shipping-rate calculation must remain independent
+         * from PageBranchResolver and branch-page resolution.
+         */
+        $branchId = $this->resolveBranchIdFromPackage(
+            $args['package'] ?? []
+        );
+
+        /*
+         * If no branch can safely be identified, leave all
+         * WooCommerce Pickup rates untouched.
+         */
+        if ($branchId === null) {
+            return $args;
+        }
+
+        /*
+         * Resolve the Massar branch from the existing repository.
+         */
+        $branch = $this->branchRepository->findById(
+            $branchId
+        );
+
+        if ($branch === null || !$branch->isActive()) {
+            return $args;
         }
 
         $branchSlug = $branch->slug();
 
         /*
-         * Only explicitly mapped Massar branches
-         * participate in Pickup filtering.
+         * Only explicitly mapped Massar branches participate
+         * in Pickup filtering.
          */
         if (!isset(self::BRANCH_PICKUP_LOCATIONS[$branchSlug])) {
-            return $rates;
+            return $args;
         }
 
-        $expectedPickupLocation =
+        $this->expectedPickupLocation =
             self::BRANCH_PICKUP_LOCATIONS[$branchSlug];
 
-        $filteredRates = [];
-
-        $hasPickupRates = false;
-        $matchingPickupFound = false;
-
-        foreach ($rates as $rateKey => $rate) {
-
-            /*
-             * Keep unexpected/non-standard values untouched.
-             */
-            if (!$rate instanceof WC_Shipping_Rate) {
-                $filteredRates[$rateKey] = $rate;
-                continue;
-            }
-
-            /*
-             * Preserve every normal shipping method exactly
-             * as WooCommerce generated it.
-             */
-            if ($rate->get_method_id() !== self::PICKUP_METHOD_ID) {
-                $filteredRates[$rateKey] = $rate;
-                continue;
-            }
-
-            /*
-             * This is a WooCommerce Local Pickup rate.
-             */
-            $hasPickupRates = true;
-
-            /*
-             * WooCommerce stores the Pickup Location name
-             * in the shipping rate metadata.
-             */
-            $pickupLocation = $rate->get_meta(
-                'pickup_location',
-                true
-            );
-
-            if (!is_string($pickupLocation)) {
-                continue;
-            }
-
-            /*
-             * Keep only the Pickup Location belonging
-             * to the current Massar branch.
-             */
-            if ($pickupLocation === $expectedPickupLocation) {
-                $filteredRates[$rateKey] = $rate;
-                $matchingPickupFound = true;
-            }
+        /*
+         * Verify that the Pickup Location expected by Massar
+         * actually exists and is enabled in WooCommerce.
+         *
+         * If it does not, keep WooCommerce's original behavior
+         * instead of hiding every Pickup Location.
+         */
+        if (!$this->isExpectedPickupLocationAvailable()) {
+            return $args;
         }
 
         /*
-         * No Pickup rates were generated.
+         * This is the Pickup Location belonging to the current
+         * Massar branch.
          *
-         * Leave WooCommerce's original rates untouched.
+         * Return the original arguments untouched.
+         *
+         * WooCommerce remains responsible for:
+         * - cost
+         * - tax
+         * - pickup address
+         * - pickup details
+         * - rate creation
          */
-        if (!$hasPickupRates) {
-            return $rates;
+        if ($pickupLocation === $this->expectedPickupLocation) {
+            return $args;
         }
 
         /*
-         * A Pickup rate existed, but we could not safely
-         * identify the matching branch location.
+         * This Pickup Location belongs to another Massar branch.
          *
-         * Never hide all Pickup locations in this case.
+         * WC_Shipping_Method::add_rate() requires both an ID and
+         * a label. When either is empty, WooCommerce stops before
+         * creating the WC_Shipping_Rate object.
+         *
+         * This prevents the unwanted Pickup Location from entering
+         * the package rates at all.
          */
-        if (!$matchingPickupFound) {
-            return $rates;
-        }
+        $args['id'] = '';
+        $args['label'] = '';
 
-        /*
-         * Return all normal shipping methods plus the
-         * Pickup Location belonging to the current branch.
-         *
-         * The original WC_Shipping_Rate object is preserved,
-         * so cost and tax handling remain under WooCommerce.
-         */
-        return $filteredRates;
+        return $args;
     }
 
     /**
-     * Resolve the Massar branch from the current WooCommerce package.
-     *
-     * BranchCartManager already stores wcbm_branch_id on cart items,
-     * and the cart is restricted to one branch.
-     *
-     * @param array<string, mixed> $package
-     *
-     * @return Branch|null
+     * Determine whether a rate belongs to WooCommerce's
+     * new Local Pickup method.
      */
-    private function resolveBranchFromPackage(
-        array $package
-    ): ?Branch {
-        if (
-            isset($package['contents'])
-            && is_array($package['contents'])
-        ) {
-            foreach ($package['contents'] as $cartItem) {
+    private function isPickupRate(string $rateId): bool
+    {
+        return str_starts_with(
+            $rateId,
+            self::PICKUP_METHOD_ID . ':'
+        );
+    }
 
-                if (!is_array($cartItem)) {
-                    continue;
-                }
-
-                if (!isset($cartItem['wcbm_branch_id'])) {
-                    continue;
-                }
-
-                $branchId = absint(
-                    $cartItem['wcbm_branch_id']
-                );
-
-                if ($branchId <= 0) {
-                    continue;
-                }
-
-                return $this->branchRepository->findById(
-                    $branchId
-                );
-            }
+    /**
+     * Resolve the Massar branch ID from the shipping package.
+     *
+     * BranchCartManager and ProductBranchManager already store
+     * wcbm_branch_id on each cart item.
+     *
+     * WooCommerce passes the same package into
+     * WC_Shipping_Method::add_rate() through the "package"
+     * rate argument.
+     *
+     * @param mixed $package
+     *
+     * @return int|null
+     */
+    private function resolveBranchIdFromPackage(
+        mixed $package
+    ): ?int {
+        if ($this->branchResolved) {
+            return $this->branchId;
         }
 
-        /*
-         * Some WooCommerce shipping calculations may not provide
-         * package contents in the expected form.
-         *
-         * In that situation, safely fall back to the current cart.
-         */
+        $this->branchResolved = true;
+
+        if (!is_array($package)) {
+            return null;
+        }
+
         if (
-            function_exists('WC')
-            && WC()->cart !== null
+            !isset($package['contents'])
+            || !is_array($package['contents'])
         ) {
-            foreach (WC()->cart->get_cart() as $cartItem) {
+            return null;
+        }
 
-                if (!is_array($cartItem)) {
-                    continue;
-                }
+        foreach ($package['contents'] as $cartItem) {
 
-                if (!isset($cartItem['wcbm_branch_id'])) {
-                    continue;
-                }
-
-                $branchId = absint(
-                    $cartItem['wcbm_branch_id']
-                );
-
-                if ($branchId <= 0) {
-                    continue;
-                }
-
-                return $this->branchRepository->findById(
-                    $branchId
-                );
+            if (!is_array($cartItem)) {
+                continue;
             }
+
+            if (!isset($cartItem['wcbm_branch_id'])) {
+                continue;
+            }
+
+            $branchId = absint(
+                $cartItem['wcbm_branch_id']
+            );
+
+            if ($branchId <= 0) {
+                continue;
+            }
+
+            $this->branchId = $branchId;
+
+            return $this->branchId;
         }
 
         return null;
+    }
+
+    /**
+     * Verify that the Pickup Location expected by the
+     * current Massar branch exists and is enabled.
+     *
+     * WooCommerce stores the new Local Pickup locations in:
+     *
+     * pickup_location_pickup_locations
+     */
+    private function isExpectedPickupLocationAvailable(): bool
+    {
+        if ($this->pickupLocationVerified) {
+            return $this->pickupLocationAvailable;
+        }
+
+        $this->pickupLocationVerified = true;
+
+        if ($this->expectedPickupLocation === null) {
+            return false;
+        }
+
+        $locations = get_option(
+            'pickup_location_pickup_locations',
+            []
+        );
+
+        if (!is_array($locations)) {
+            return false;
+        }
+
+        foreach ($locations as $location) {
+
+            if (!is_array($location)) {
+                continue;
+            }
+
+            $name = isset($location['name'])
+                ? (string) $location['name']
+                : '';
+
+            if ($name !== $this->expectedPickupLocation) {
+                continue;
+            }
+
+            /*
+             * WooCommerce stores enabled as a boolean/string
+             * depending on how the settings were saved.
+             */
+            $enabled = isset($location['enabled'])
+                ? wc_string_to_bool($location['enabled'])
+                : false;
+
+            $this->pickupLocationAvailable = $enabled;
+
+            return $this->pickupLocationAvailable;
+        }
+
+        return false;
     }
 }
