@@ -98,6 +98,12 @@ final class Plugin
         $services->branchCatalogFilter()->register();
 
         /*
+         * Filter WooCommerce Local Pickup rates
+         * according to the current Massar branch.
+         */
+        $services->branchPickupFilter()->register();
+
+        /*
          * Save branch information into the order.
          */
         $services->orderMetaManager()->register();
@@ -138,7 +144,7 @@ final class Plugin
             [
                 'abm-swiper',
             ],
-            MASSAR_BRANCH_MANAGER_PLUGIN_VERSION,
+            '11',
             true
         );
     }
